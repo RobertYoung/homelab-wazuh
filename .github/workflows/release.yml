@@ -48,44 +48,26 @@ jobs:
           # Otherwise GITHUB_TOKEN is sufficient
           persist-credentials: true
 
-      # Setup Node.js for semantic-release (which is a Node.js tool)
-      # Using LTS version for stability
+      # Run semantic-release using the official action
+      # This action will:
+      # 1. Setup Node.js environment
+      # 2. Install semantic-release and plugins
+      # 3. Analyze commits since last release using conventional commit format
+      # 4. Determine next version number (major.minor.patch)
+      # 5. Create a git tag
+      # 6. Create a GitHub release with release notes
+      # Configuration is read from .releaserc.json
       # Action pinned to commit SHA for immutability (security best practice)
-      - name: Setup Node.js
-        uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b # v4.0.3
-        with:
-          node-version: 'lts/*'
-
-      # Install semantic-release and required plugins
-      # These are installed fresh each run to avoid version drift
-      - name: Install semantic-release
-        run: |
-          npm install --save-dev \
-            semantic-release@^24.0.0 \
-            @semantic-release/changelog@^6.0.0 \
-            @semantic-release/git@^10.0.0 \
-            @semantic-release/github@^11.0.0 \
-            conventional-changelog-conventionalcommits@^8.0.0
-
-      # Run semantic-release
-      # This step will:
-      # 1. Analyze commits since last release using conventional commit format
-      # 2. Determine next version number (major.minor.patch)
-      # 3. Generate/update CHANGELOG.md
-      # 4. Create a git tag
-      # 5. Create a GitHub release with release notes
-      # 6. Commit the changelog back to the repository
       - name: Run semantic-release
+        uses: cycjimmy/semantic-release-action@cb425203a562475bca039ba4dbf90c7f9ac790f4 # v4.1.0
         env:
           # GITHUB_TOKEN is automatically provided by GitHub Actions
           # It has the permissions specified in the job's permissions block
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # GIT_AUTHOR/COMMITTER settings ensure changelog commits are attributed correctly
-          GIT_AUTHOR_NAME: github-actions[bot]
-          GIT_AUTHOR_EMAIL: github-actions[bot]@users.noreply.github.com
-          GIT_COMMITTER_NAME: github-actions[bot]
-          GIT_COMMITTER_EMAIL: github-actions[bot]@users.noreply.github.com
-        run: npx semantic-release
+        with:
+          # Install required plugins for conventional commits
+          extra_plugins: |
+            conventional-changelog-conventionalcommits@^8.0.0
 
       # Optional: Output release information for debugging
       # Semantic-release sets outputs that can be used in subsequent steps

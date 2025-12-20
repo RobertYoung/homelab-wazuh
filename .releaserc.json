@@ -46,31 +46,11 @@
       }
     ],
     [
-      "@semantic-release/changelog",
-      {
-        "changelogFile": "CHANGELOG.md",
-        "changelogTitle": "# Changelog\n\nAll notable changes to this project will be documented in this file. See [Conventional Commits](https://conventionalcommits.org) for commit guidelines."
-      }
-    ],
-    [
       "@semantic-release/github",
       {
-        "assets": [
-          {
-            "path": "CHANGELOG.md",
-            "label": "Changelog"
-          }
-        ],
         "successComment": "This ${issue.pull_request ? 'pull request' : 'issue'} is included in version ${nextRelease.version} :tada:",
         "labels": ["released"],
         "releasedLabels": ["released<%= nextRelease.channel ? `-${nextRelease.channel}` : '' %>@${nextRelease.gitTag}"]
-      }
-    ],
-    [
-      "@semantic-release/git",
-      {
-        "assets": ["CHANGELOG.md"],
-        "message": "chore(release): ${nextRelease.version} [skip ci]\n\n${nextRelease.notes}"
       }
     ]
   ]
