@@ -31,7 +31,7 @@ jobs:
       # Security: Harden runner environment and restrict egress traffic
       # See: https://github.com/step-security/harden-runner
       - name: Harden Runner
-        uses: step-security/harden-runner@5c7944e73c4c2a096b17a9cb74d65b6c2bbafbde # v2.9.1
+        uses: step-security/harden-runner@20cf305ff2072d973412fa9b1e3a4f227bda3c76 # v2.14.0
         with:
           egress-policy: audit # TODO: change to 'egress-policy: block' after reviewing egress traffic
           disable-sudo: true
@@ -41,7 +41,7 @@ jobs:
       # fetch-depth: 0 is required for semantic-release to analyze full commit history
       # Action pinned to commit SHA for immutability (security best practice)
       - name: Checkout repository
-        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
         with:
           fetch-depth: 0
           # Use PAT if you need to trigger other workflows from release commits
@@ -59,7 +59,7 @@ jobs:
       # Configuration is read from .releaserc.json
       # Action pinned to commit SHA for immutability (security best practice)
       - name: Run semantic-release
-        uses: cycjimmy/semantic-release-action@cb425203a562475bca039ba4dbf90c7f9ac790f4 # v4.1.0
+        uses: cycjimmy/semantic-release-action@b12c8f6015dc215fe37bc154d4ad456dd3833c90 # v6.0.0
         env:
           # GITHUB_TOKEN is automatically provided by GitHub Actions
           # It has the permissions specified in the job's permissions block
