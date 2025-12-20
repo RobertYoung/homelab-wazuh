@@ -23,3 +23,8 @@ Thumbs.db
 # Virtual environments
 venv/
 .venv/
+
+# Node.js (for semantic-release in CI)
+node_modules/
+package.json
+package-lock.json
