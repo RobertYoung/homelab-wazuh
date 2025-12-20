@@ -64,6 +64,10 @@ jobs:
           # GITHUB_TOKEN is automatically provided by GitHub Actions
           # It has the permissions specified in the job's permissions block
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          # Install conventional-changelog-conventionalcommits required by .releaserc.json preset
+          extra_plugins: |
+            conventional-changelog-conventionalcommits@7.0.2
 
       # Optional: Output release information for debugging
       # Semantic-release sets outputs that can be used in subsequent steps
