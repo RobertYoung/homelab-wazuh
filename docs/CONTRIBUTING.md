@@ -2,7 +2,7 @@
 
 ## Conventional Commits
 
-This project uses [Conventional Commits](https://www.conventionalcommits.org/) to automate versioning and changelog generation through semantic-release.
+This project uses [Conventional Commits](https://www.conventionalcommits.org/) to automate versioning and release management through semantic-release.
 
 ### Commit Message Format
 
@@ -99,7 +99,7 @@ Common scopes for this project:
 To prevent a commit from triggering any analysis (useful for CI commits), add `[skip ci]` to the commit message:
 
 ```
-chore: update changelog [skip ci]
+chore: update documentation [skip ci]
 ```
 
 ## Pull Request Guidelines
@@ -117,9 +117,8 @@ Releases are fully automated:
 2. Push to `main` branch
 3. GitHub Actions runs semantic-release
 4. semantic-release analyzes commits and determines version
-5. Changelog is generated and committed
-6. GitHub release is created with release notes
-7. Version tag is created
+5. GitHub release is created with release notes
+6. Version tag is created
 
 ## Local Testing
 
