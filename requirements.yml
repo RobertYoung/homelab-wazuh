@@ -1,0 +1,9 @@
+---
+# External Ansible roles from Ansible Galaxy
+# Install with: ansible-galaxy install -r requirements.yml
+
+# Example:
+# - name: geerlingguy.docker
+#   version: 6.1.0
+
+# Add your role dependencies here

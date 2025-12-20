@@ -1,0 +1,25 @@
+# Ansible
+*.retry
+*.log
+
+# Vault password files
+.vault_pass
+vault_pass.txt
+
+# Downloaded roles
+roles/external/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Virtual environments
+venv/
+.venv/
