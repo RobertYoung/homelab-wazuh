@@ -1,0 +1,10 @@
+[Unit]
+Description=Renew Wazuh certificates from Step CA
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart={{ wazuh_install_dir }}/scripts/renew-certs.sh
+
+[Install]
+WantedBy=multi-user.target

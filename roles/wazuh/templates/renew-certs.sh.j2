@@ -1,0 +1,170 @@
+#!/bin/bash
+set -e
+
+# Common configuration
+CERT_DIR="{{ wazuh_config_dir }}/wazuh_indexer_ssl_certs"
+FRONTEND_CERT_DIR="{{ wazuh_certs_dir }}/step-ca"
+CERT_OWNER="1000"
+CERT_GROUP="1000"
+PROVISIONER="{{ wazuh_step_ca_provisioner }}"
+PASSWORD_FILE="{{ wazuh_step_ca_password_file }}"
+CERT_VALIDITY="168h"
+KEY_TYPE="RSA"
+KEY_SIZE="2048"
+
+# Track which containers need restart
+RESTART_INDEXER=0
+RESTART_MANAGER=0
+RESTART_DASHBOARD=0
+
+# Function to check if certificate needs renewal
+needs_renewal() {
+  local cert_path="$1"
+  if [ ! -f "$cert_path" ]; then
+    return 0  # Cert doesn't exist, needs generation
+  fi
+  if /usr/bin/step certificate needs-renewal "$cert_path"; then
+    return 0  # Cert needs renewal
+  fi
+  return 1  # Cert is still valid
+}
+
+# Function to check if container exists
+container_exists() {
+  local container_name="$1"
+  /usr/bin/docker ps -a --format '{{ '{{' }}.Names{{ '}}' }}' 2>/dev/null | grep -q "^${container_name}$"
+}
+
+# Function to wait for container to be healthy
+wait_for_container() {
+  local container_name="$1"
+  local max_wait=60
+  local count=0
+
+  if ! container_exists "$container_name"; then
+    echo "Container $container_name does not exist yet, skipping health check"
+    return 0
+  fi
+
+  echo "Waiting for $container_name to be healthy..."
+  while [ $count -lt $max_wait ]; do
+    if /usr/bin/docker inspect --format='{{ '{{' }}.State.Health.Status{{ '}}' }}' "$container_name" 2>/dev/null | grep -q "healthy"; then
+      echo "$container_name is healthy"
+      return 0
+    fi
+    sleep 2
+    count=$((count + 1))
+  done
+
+  echo "Warning: $container_name did not become healthy within ${max_wait} seconds"
+  return 1
+}
+
+# Generate indexer certificate
+if needs_renewal "$CERT_DIR/wazuh.indexer.pem"; then
+  echo "Renewing indexer certificate..."
+  /usr/bin/step ca certificate wazuh.indexer \
+    "$CERT_DIR/wazuh.indexer.pem" \
+    "$CERT_DIR/wazuh.indexer-key.pem" \
+    --provisioner "$PROVISIONER" \
+    --provisioner-password-file "$PASSWORD_FILE" \
+    --kty "$KEY_TYPE" --size "$KEY_SIZE" --not-after="$CERT_VALIDITY" --force
+  /usr/bin/chown "$CERT_OWNER:$CERT_GROUP" "$CERT_DIR/wazuh.indexer.pem" "$CERT_DIR/wazuh.indexer-key.pem"
+  RESTART_INDEXER=1
+else
+  echo "Indexer certificate does not need renewal"
+fi
+
+# Generate manager certificate
+if needs_renewal "$CERT_DIR/wazuh.manager.pem"; then
+  echo "Renewing manager certificate..."
+  /usr/bin/step ca certificate wazuh.manager \
+    "$CERT_DIR/wazuh.manager.pem" \
+    "$CERT_DIR/wazuh.manager-key.pem" \
+    --provisioner "$PROVISIONER" \
+    --provisioner-password-file "$PASSWORD_FILE" \
+    --kty "$KEY_TYPE" --size "$KEY_SIZE" --not-after="$CERT_VALIDITY" --force
+  /usr/bin/chown "$CERT_OWNER:$CERT_GROUP" "$CERT_DIR/wazuh.manager.pem" "$CERT_DIR/wazuh.manager-key.pem"
+  RESTART_MANAGER=1
+else
+  echo "Manager certificate does not need renewal"
+fi
+
+# Generate dashboard backend certificate
+if needs_renewal "$CERT_DIR/wazuh.dashboard.pem"; then
+  echo "Renewing dashboard backend certificate..."
+  /usr/bin/step ca certificate wazuh.dashboard \
+    "$CERT_DIR/wazuh.dashboard.pem" \
+    "$CERT_DIR/wazuh.dashboard-key.pem" \
+    --provisioner "$PROVISIONER" \
+    --provisioner-password-file "$PASSWORD_FILE" \
+    --kty "$KEY_TYPE" --size "$KEY_SIZE" --not-after="$CERT_VALIDITY" --force
+  /usr/bin/chown "$CERT_OWNER:$CERT_GROUP" "$CERT_DIR/wazuh.dashboard.pem" "$CERT_DIR/wazuh.dashboard-key.pem"
+  RESTART_DASHBOARD=1
+else
+  echo "Dashboard backend certificate does not need renewal"
+fi
+
+# Generate admin certificate
+if needs_renewal "$CERT_DIR/admin.pem"; then
+  echo "Renewing admin certificate..."
+  /usr/bin/step ca certificate admin \
+    "$CERT_DIR/admin.pem" \
+    "$CERT_DIR/admin-key.pem" \
+    --provisioner "$PROVISIONER" \
+    --provisioner-password-file "$PASSWORD_FILE" \
+    --kty "$KEY_TYPE" --size "$KEY_SIZE" --not-after="$CERT_VALIDITY" --force
+  /usr/bin/chown "$CERT_OWNER:$CERT_GROUP" "$CERT_DIR/admin.pem" "$CERT_DIR/admin-key.pem"
+  # Admin cert doesn't require container restart
+else
+  echo "Admin certificate does not need renewal"
+fi
+
+# Generate dashboard frontend certificate
+if needs_renewal "$FRONTEND_CERT_DIR/fullchain.pem"; then
+  echo "Renewing dashboard frontend certificate..."
+  /usr/bin/step ca certificate {{ wazuh_domain }} \
+    "$FRONTEND_CERT_DIR/fullchain.pem" \
+    "$FRONTEND_CERT_DIR/privkey.pem" \
+    --provisioner "$PROVISIONER" \
+    --provisioner-password-file "$PASSWORD_FILE" \
+    --not-after="$CERT_VALIDITY" --force
+  /usr/bin/chown "$CERT_OWNER:$CERT_GROUP" "$FRONTEND_CERT_DIR"/*.pem
+  /usr/bin/chmod 440 "$FRONTEND_CERT_DIR"/*.pem
+  RESTART_DASHBOARD=1
+else
+  echo "Dashboard frontend certificate does not need renewal"
+fi
+
+# Restart containers in order if needed
+if [ $RESTART_INDEXER -eq 1 ]; then
+  if container_exists wazuh.indexer; then
+    echo "Restarting wazuh.indexer..."
+    /usr/bin/docker restart wazuh.indexer 2>/dev/null || echo "Warning: Failed to restart wazuh.indexer"
+    wait_for_container wazuh.indexer
+  else
+    echo "Container wazuh.indexer does not exist yet, skipping restart"
+  fi
+fi
+
+if [ $RESTART_MANAGER -eq 1 ]; then
+  if container_exists wazuh.manager; then
+    echo "Restarting wazuh.manager..."
+    /usr/bin/docker restart wazuh.manager 2>/dev/null || echo "Warning: Failed to restart wazuh.manager"
+    wait_for_container wazuh.manager
+  else
+    echo "Container wazuh.manager does not exist yet, skipping restart"
+  fi
+fi
+
+if [ $RESTART_DASHBOARD -eq 1 ]; then
+  if container_exists wazuh.dashboard; then
+    echo "Restarting wazuh.dashboard..."
+    /usr/bin/docker restart wazuh.dashboard 2>/dev/null || echo "Warning: Failed to restart wazuh.dashboard"
+    wait_for_container wazuh.dashboard
+  else
+    echo "Container wazuh.dashboard does not exist yet, skipping restart"
+  fi
+fi
+
+echo "Certificate renewal complete"

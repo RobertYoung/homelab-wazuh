@@ -1,0 +1,12 @@
+---
+- name: Prerequisites
+  ansible.builtin.include_tasks:
+    file: prerequisites.yml
+
+- name: Certificates
+  ansible.builtin.include_tasks:
+    file: certificates.yml
+
+- name: Deployment
+  ansible.builtin.include_tasks:
+    file: deployment.yml
