@@ -8,3 +8,4 @@ domain: local.iamrobertyoung.co.uk
 # Secure passwords from AWS SSM
 wazuh_indexer_password: "{{ lookup('amazon.aws.aws_ssm', '/home-server/wazuh-indexer-password') }}"
 wazuh_api_password: "{{ lookup('amazon.aws.aws_ssm', '/home-server/wazuh-api-password') }}"
+wazuh_kibana_password: "{{ lookup('amazon.aws.aws_ssm', '/home-server/wazuh-kibana-password') }}"

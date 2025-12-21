@@ -106,14 +106,28 @@ else
 fi
 
 # Generate admin certificate
+# Admin cert requires PKCS8 format key for OpenSearch Security plugin
 if needs_renewal "$CERT_DIR/admin.pem"; then
   echo "Renewing admin certificate..."
+
+  # Generate certificate with Step CA
   /usr/bin/step ca certificate admin \
     "$CERT_DIR/admin.pem" \
-    "$CERT_DIR/admin-key.pem" \
+    "$CERT_DIR/admin-key-temp.pem" \
     --provisioner "$PROVISIONER" \
     --provisioner-password-file "$PASSWORD_FILE" \
     --kty "$KEY_TYPE" --size "$KEY_SIZE" --not-after="$CERT_VALIDITY" --force
+
+  # Convert private key to PKCS8 format (required by OpenSearch Security)
+  # Step CA generates PKCS8 by default with --kty RSA, but we ensure it explicitly
+  /usr/bin/openssl pkcs8 -inform PEM -outform PEM \
+    -in "$CERT_DIR/admin-key-temp.pem" \
+    -topk8 -nocrypt -v1 PBE-SHA1-3DES \
+    -out "$CERT_DIR/admin-key.pem"
+
+  # Remove temporary key file
+  rm -f "$CERT_DIR/admin-key-temp.pem"
+
   /usr/bin/chown "$CERT_OWNER:$CERT_GROUP" "$CERT_DIR/admin.pem" "$CERT_DIR/admin-key.pem"
   # Admin cert doesn't require container restart
 else
