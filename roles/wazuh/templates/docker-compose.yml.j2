@@ -1,0 +1,108 @@
+services:
+  wazuh.indexer:
+    image: wazuh/wazuh-indexer:{{ wazuh_version }}
+    hostname: wazuh.indexer
+    container_name: wazuh.indexer
+    restart: unless-stopped
+    ports:
+      - "{{ wazuh_indexer_port }}:9200"
+    env_file:
+      - indexer.env
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    volumes:
+      - wazuh-indexer-data:/var/lib/wazuh-indexer
+      - {{ wazuh_certs_dir }}/root-ca.pem:/usr/share/wazuh-indexer/config/certs/root-ca.pem:ro
+      - {{ wazuh_certs_dir }}/wazuh.indexer.pem:/usr/share/wazuh-indexer/config/certs/indexer.pem:ro
+      - {{ wazuh_certs_dir }}/wazuh.indexer-key.pem:/usr/share/wazuh-indexer/config/certs/indexer-key.pem:ro
+      - {{ wazuh_certs_dir }}/admin.pem:/usr/share/wazuh-indexer/config/certs/admin.pem:ro
+      - {{ wazuh_certs_dir }}/admin-key.pem:/usr/share/wazuh-indexer/config/certs/admin-key.pem:ro
+    networks:
+      - wazuh
+
+  wazuh.manager:
+    image: wazuh/wazuh-manager:{{ wazuh_version }}
+    hostname: wazuh.manager
+    container_name: wazuh.manager
+    restart: unless-stopped
+    depends_on:
+      - wazuh.indexer
+    ports:
+      - "{{ wazuh_manager_port }}:1514"
+      - "{{ wazuh_enrollment_port }}:1515"
+      - "{{ wazuh_syslog_port }}:514/udp"
+      - "{{ wazuh_api_port }}:55000"
+    env_file:
+      - manager.env
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 655360
+        hard: 655360
+    volumes:
+      - wazuh-api-configuration:/var/ossec/api/configuration
+      - wazuh-etc:/var/ossec/etc
+      - wazuh-logs:/var/ossec/logs
+      - wazuh-queue:/var/ossec/queue
+      - wazuh-var-multigroups:/var/ossec/var/multigroups
+      - wazuh-active-response:/var/ossec/active-response/bin
+      - wazuh-wodles:/var/ossec/wodles
+      - {{ wazuh_certs_dir }}/root-ca.pem:/var/ossec/etc/certs/root-ca.pem:ro
+      - {{ wazuh_certs_dir }}/wazuh.manager.pem:/var/ossec/etc/certs/server.pem:ro
+      - {{ wazuh_certs_dir }}/wazuh.manager-key.pem:/var/ossec/etc/certs/server-key.pem:ro
+    networks:
+      - wazuh
+
+  wazuh.dashboard:
+    image: wazuh/wazuh-dashboard:{{ wazuh_version }}
+    hostname: wazuh.dashboard
+    container_name: wazuh.dashboard
+    restart: unless-stopped
+    depends_on:
+      - wazuh.indexer
+      - wazuh.manager
+    ports:
+      - "{{ wazuh_dashboard_port }}:443"
+    env_file:
+      - dashboard.env
+    volumes:
+      - wazuh-dashboard-config:/usr/share/wazuh-dashboard/config
+      - wazuh-dashboard-custom:/usr/share/wazuh-dashboard/plugins/wazuh/public/assets/custom
+      - {{ wazuh_certs_dir }}/root-ca.pem:/usr/share/wazuh-dashboard/config/certs/root-ca.pem:ro
+      - {{ wazuh_certs_dir }}/wazuh.dashboard.pem:/usr/share/wazuh-dashboard/config/certs/dashboard.pem:ro
+      - {{ wazuh_certs_dir }}/wazuh.dashboard-key.pem:/usr/share/wazuh-dashboard/config/certs/dashboard-key.pem:ro
+    networks:
+      - wazuh
+
+networks:
+  wazuh:
+    driver: bridge
+
+volumes:
+  wazuh-indexer-data:
+    driver: local
+  wazuh-api-configuration:
+    driver: local
+  wazuh-etc:
+    driver: local
+  wazuh-logs:
+    driver: local
+  wazuh-queue:
+    driver: local
+  wazuh-var-multigroups:
+    driver: local
+  wazuh-active-response:
+    driver: local
+  wazuh-wodles:
+    driver: local
+  wazuh-dashboard-config:
+    driver: local
+  wazuh-dashboard-custom:
+    driver: local
