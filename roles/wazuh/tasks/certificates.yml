@@ -1,134 +1,134 @@
 ---
-# Wazuh Certificate Creation using wazuh-certs-tool.sh
-# https://documentation.wazuh.com/current/installation-guide/wazuh-indexer/step-by-step.html#certificate-creation
+# Wazuh Certificate Management using Step CA and systemd
+# Systemd services handle all certificate generation and renewal
 
-- name: Download wazuh-certs-tool.sh
-  become: true
-  ansible.builtin.get_url:
-    url: https://packages.wazuh.com/{{ wazuh_version }}/wazuh-certs-tool.sh
-    dest: "{{ wazuh_install_dir }}/wazuh-certs-tool.sh"
-    mode: '0755'
-
-- name: Create certificate configuration file
-  become: true
-  ansible.builtin.copy:
-    content: |
-      nodes:
-        # Wazuh indexer nodes
-        indexer:
-          - name: wazuh.indexer
-            ip: wazuh.indexer
-
-        # Wazuh server nodes
-        server:
-          - name: wazuh.manager
-            ip: wazuh.manager
-
-        # Wazuh dashboard nodes
-        dashboard:
-          - name: wazuh.dashboard
-            ip: wazuh.dashboard
-    dest: "{{ wazuh_install_dir }}/config.yml"
-    mode: '0644'
-
-- name: Generate Wazuh certificates
-  become: true
-  ansible.builtin.shell:
-    cmd: "{{ wazuh_install_dir }}/wazuh-certs-tool.sh --all"
-    chdir: "{{ wazuh_install_dir }}"
-    creates: "{{ wazuh_install_dir }}/wazuh-certificates.tar"
-
-- name: Extract generated certificates
-  become: true
-  ansible.builtin.unarchive:
-    src: "{{ wazuh_install_dir }}/wazuh-certificates.tar"
-    dest: "{{ wazuh_certs_dir }}"
-    remote_src: true
-
-- name: Set certificate ownership for indexer
+- name: Create SSL certificates directory
   become: true
   ansible.builtin.file:
-    path: "{{ wazuh_certs_dir }}/{{ item }}"
+    path: "{{ wazuh_config_dir }}/wazuh_indexer_ssl_certs"
+    state: directory
+    mode: '0755'
+
+- name: Copy Step CA root certificate
+  become: true
+  ansible.builtin.copy:
+    src: /root/.step/certs/root_ca.crt
+    dest: "{{ wazuh_config_dir }}/wazuh_indexer_ssl_certs/root-ca.pem"
+    owner: root
+    group: root
+    mode: '0644'
+    remote_src: true
+
+- name: Copy Step CA root certificate for manager
+  become: true
+  ansible.builtin.copy:
+    src: /root/.step/certs/root_ca.crt
+    dest: "{{ wazuh_config_dir }}/wazuh_indexer_ssl_certs/root-ca-manager.pem"
+    owner: root
+    group: root
+    mode: '0644'
+    remote_src: true
+
+- name: Create Step CA certificates directory
+  become: true
+  ansible.builtin.file:
+    path: "{{ wazuh_certs_dir }}/step-ca"
+    state: directory
     owner: "1000"
     group: "1000"
-    mode: "{{ '0600' if 'key' in item else '0644' }}"
+    mode: '0500'
+
+# Clean up old template-based systemd services
+- name: Stop and disable old template-based timers
+  become: true
+  ansible.builtin.systemd:
+    name: "wazuh-cert-renewer@{{ item }}.timer"
+    state: stopped
+    enabled: false
   loop:
-    - wazuh.indexer.pem
-    - wazuh.indexer-key.pem
-    - wazuh.manager.pem
-    - wazuh.manager-key.pem
-    - wazuh.dashboard.pem
-    - wazuh.dashboard-key.pem
-    - admin.pem
-    - admin-key.pem
-    - root-ca.pem
+    - indexer
+    - manager
+    - dashboard-backend
+    - admin
+    - dashboard-frontend
+  failed_when: false
 
-# ===== COMMENTED OUT: Step CA Integration =====
-# The following tasks use Step CA for certificate management.
-# Commented out in favor of Wazuh's native certificate tool.
+- name: Remove old template-based systemd service file
+  become: true
+  ansible.builtin.file:
+    path: /etc/systemd/system/wazuh-cert-renewer@.service
+    state: absent
 
-# - name: Copy Step CA root certificate
-#   become: true
-#   ansible.builtin.copy:
-#     src: "{{ wazuh_step_ca_root_cert }}"
-#     dest: "{{ wazuh_certs_dir }}/root-ca.pem"
-#     owner: 1000
-#     group: 1000
-#     mode: '0644'
-#     remote_src: true
+- name: Remove old template-based systemd timer file
+  become: true
+  ansible.builtin.file:
+    path: /etc/systemd/system/wazuh-cert-renewer@.timer
+    state: absent
 
-# - name: Create Wazuh certificate renewer systemd service template
-#   become: true
-#   ansible.builtin.template:
-#     src: templates/wazuh-cert-renewer@.service.j2
-#     dest: /etc/systemd/system/wazuh-cert-renewer@.service
-#     owner: root
-#     group: root
-#     mode: '0644'
-#   register: wazuh_cert_renewer_service
+- name: Remove old renewal script
+  become: true
+  ansible.builtin.file:
+    path: "{{ wazuh_install_dir }}/scripts/renew-cert.sh"
+    state: absent
 
-# - name: Create Wazuh certificate renewer systemd timer template
-#   become: true
-#   ansible.builtin.template:
-#     src: templates/wazuh-cert-renewer@.timer.j2
-#     dest: /etc/systemd/system/wazuh-cert-renewer@.timer
-#     owner: root
-#     group: root
-#     mode: '0644'
-#   register: wazuh_cert_renewer_timer
+- name: Reload systemd daemon after cleanup
+  become: true
+  ansible.builtin.systemd:
+    daemon_reload: true
 
-# - name: Reload systemd daemon
-#   become: true
-#   ansible.builtin.systemd:
-#     daemon_reload: true
-#   when: wazuh_cert_renewer_service.changed or wazuh_cert_renewer_timer.changed
+- name: Create certificate renewal scripts directory
+  become: true
+  ansible.builtin.file:
+    path: "{{ wazuh_install_dir }}/scripts"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
 
-# - name: Enable and start Wazuh certificate renewal timers
-#   become: true
-#   ansible.builtin.systemd:
-#     name: "wazuh-cert-renewer@{{ item }}.timer"
-#     enabled: true
-#     state: started
-#   loop:
-#     - manager
-#     - indexer
-#     - dashboard
-#     - admin
+- name: Install certificate renewal script
+  become: true
+  ansible.builtin.template:
+    src: renew-certs.sh.j2
+    dest: "{{ wazuh_install_dir }}/scripts/renew-certs.sh"
+    owner: root
+    group: root
+    mode: '0755'
 
-# - name: Trigger certificate creation for initial deployment
-#   become: true
-#   ansible.builtin.systemd:
-#     name: "wazuh-cert-renewer@{{ item }}.service"
-#     state: started
-#   loop:
-#     - manager
-#     - indexer
-#     - dashboard
-#     - admin
-#   ignore_errors: true
-#   register: cert_creation
+- name: Install Step CA certificate renewal systemd service
+  become: true
+  ansible.builtin.template:
+    src: wazuh-cert-renewer.service.j2
+    dest: /etc/systemd/system/wazuh-cert-renewer.service
+    owner: root
+    group: root
+    mode: '0644'
+  register: renewal_service
 
-# - name: Wait for certificate creation to complete
-#   ansible.builtin.pause:
-#     seconds: 5
-#   when: cert_creation.changed
+- name: Install Step CA certificate renewal systemd timer
+  become: true
+  ansible.builtin.template:
+    src: wazuh-cert-renewer.timer.j2
+    dest: /etc/systemd/system/wazuh-cert-renewer.timer
+    owner: root
+    group: root
+    mode: '0644'
+  register: renewal_timer
+
+- name: Reload systemd daemon
+  become: true
+  ansible.builtin.systemd:
+    daemon_reload: true
+  when: renewal_service.changed or renewal_timer.changed
+
+- name: Trigger initial certificate generation
+  become: true
+  ansible.builtin.systemd:
+    name: wazuh-cert-renewer.service
+    state: started
+
+- name: Enable and start Step CA certificate renewal timer
+  become: true
+  ansible.builtin.systemd:
+    name: wazuh-cert-renewer.timer
+    enabled: true
+    state: started

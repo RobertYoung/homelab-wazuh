@@ -1,27 +1,81 @@
 ---
-- name: Copy Docker Compose template
+# Create configuration directory structure
+- name: Create Wazuh configuration subdirectories
   become: true
-  ansible.builtin.template:
-    src: templates/docker-compose.yml.j2
-    dest: "{{ wazuh_install_dir }}/docker-compose.yml"
+  ansible.builtin.file:
+    path: "{{ wazuh_config_dir }}/{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  loop:
+    - wazuh_cluster
+    - wazuh_indexer
+    - wazuh_dashboard
+
+# Copy manager configuration
+- name: Copy Wazuh manager configuration
+  become: true
+  ansible.builtin.copy:
+    src: files/wazuh_manager.conf
+    dest: "{{ wazuh_config_dir }}/wazuh_cluster/wazuh_manager.conf"
     owner: root
     group: root
     mode: '0644'
+
+# Copy indexer configurations
+- name: Copy Wazuh indexer configuration
+  become: true
+  ansible.builtin.copy:
+    src: files/wazuh.indexer.yml
+    dest: "{{ wazuh_config_dir }}/wazuh_indexer/wazuh.indexer.yml"
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Copy indexer internal users configuration
+  become: true
+  ansible.builtin.copy:
+    src: files/internal_users.yml
+    dest: "{{ wazuh_config_dir }}/wazuh_indexer/internal_users.yml"
+    owner: root
+    group: root
+    mode: '0644'
+
+# Copy dashboard configurations
+- name: Copy OpenSearch Dashboards configuration
+  become: true
+  ansible.builtin.copy:
+    src: files/opensearch_dashboards.yml
+    dest: "{{ wazuh_config_dir }}/wazuh_dashboard/opensearch_dashboards.yml"
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Copy Wazuh dashboard configuration
+  become: true
+  ansible.builtin.template:
+    src: templates/wazuh.yml.j2
+    dest: "{{ wazuh_config_dir }}/wazuh_dashboard/wazuh.yml"
+    owner: root
+    group: root
+    mode: '0644'
+
+# Copy environment variable files
+- name: Copy manager environment variables
+  become: true
+  ansible.builtin.template:
+    src: templates/manager.env.j2
+    dest: "{{ wazuh_install_dir }}/manager.env"
+    owner: root
+    group: root
+    mode: '0600'
 
 - name: Copy indexer environment variables
   become: true
   ansible.builtin.template:
     src: templates/indexer.env.j2
     dest: "{{ wazuh_install_dir }}/indexer.env"
-    owner: root
-    group: root
-    mode: '0600'
-
-- name: Copy manager environment variables
-  become: true
-  ansible.builtin.template:
-    src: templates/manager.env.j2
-    dest: "{{ wazuh_install_dir }}/manager.env"
     owner: root
     group: root
     mode: '0600'
@@ -35,15 +89,17 @@
     group: root
     mode: '0600'
 
-- name: Copy dashboard configuration file
+# Copy Docker Compose file
+- name: Copy Docker Compose template
   become: true
   ansible.builtin.template:
-    src: templates/opensearch_dashboards.yml.j2
-    dest: "{{ wazuh_install_dir }}/opensearch_dashboards.yml"
+    src: templates/docker-compose.yml.j2
+    dest: "{{ wazuh_install_dir }}/docker-compose.yml"
     owner: root
     group: root
     mode: '0644'
 
+# Deploy Wazuh
 - name: Deploy Wazuh using Docker Compose
   become: true
   community.docker.docker_compose_v2:
@@ -65,43 +121,6 @@
   ansible.builtin.pause:
     seconds: 30
   when: wazuh_deployment.changed
-
-- name: Copy dashboard config to volume
-  become: true
-  ansible.builtin.shell:
-    cmd: docker cp {{ wazuh_install_dir }}/opensearch_dashboards.yml wazuh.dashboard:/usr/share/wazuh-dashboard/config/opensearch_dashboards.yml
-  when: wazuh_deployment.changed
-  ignore_errors: true
-
-- name: Initialize Wazuh Indexer security
-  become: true
-  ansible.builtin.shell:
-    cmd: |
-      docker exec wazuh.indexer bash -c "
-      JAVA_HOME=/usr/share/wazuh-indexer/jdk \
-      OPENSEARCH_PATH_CONF=/usr/share/wazuh-indexer/config \
-      /usr/share/wazuh-indexer/plugins/opensearch-security/tools/securityadmin.sh \
-        -cd /usr/share/wazuh-indexer/config/opensearch-security \
-        -icl \
-        -key /usr/share/wazuh-indexer/config/certs/admin-key.pem \
-        -cert /usr/share/wazuh-indexer/config/certs/admin.pem \
-        -cacert /usr/share/wazuh-indexer/config/certs/root-ca.pem \
-        -h wazuh.indexer \
-        -nhnv
-      "
-  when: wazuh_deployment.changed
-  register: indexer_security_init
-  until: indexer_security_init.rc == 0
-  retries: 10
-  delay: 10
-  ignore_errors: true
-
-- name: Restart dashboard after config copy
-  become: true
-  ansible.builtin.shell:
-    cmd: docker restart wazuh.dashboard
-  when: wazuh_deployment.changed and indexer_security_init is succeeded
-  ignore_errors: true
 
 - name: Wait for services to stabilize
   ansible.builtin.pause:

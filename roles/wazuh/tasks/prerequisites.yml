@@ -1,0 +1,37 @@
+---
+- name: Set vm.max_map_count kernel parameter for OpenSearch
+  become: true
+  ansible.builtin.sysctl:
+    name: vm.max_map_count
+    value: '262144'
+    state: present
+    sysctl_set: true
+    reload: true
+
+- name: Create Wazuh installation directory
+  become: true
+  ansible.builtin.file:
+    path: "{{ wazuh_install_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Create Wazuh subdirectories
+  become: true
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  loop:
+    - "{{ wazuh_certs_dir }}"
+    - "{{ wazuh_config_dir }}"
+
+- name: Ensure Docker service is running
+  become: true
+  ansible.builtin.systemd:
+    name: docker
+    state: started
+    enabled: true
