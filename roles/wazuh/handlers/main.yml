@@ -1,6 +1,6 @@
 ---
 - name: restart wazuh
-  community.docker.docker_compose_v2:
-    project_src: "{{ wazuh_install_dir }}"
+  ansible.builtin.systemd:
+    name: wazuh
     state: restarted
   become: true

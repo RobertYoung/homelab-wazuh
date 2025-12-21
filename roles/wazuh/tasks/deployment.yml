@@ -99,13 +99,30 @@
     group: root
     mode: '0644'
 
-# Deploy Wazuh
-- name: Deploy Wazuh using Docker Compose
+# Install systemd service for Wazuh
+- name: Install Wazuh systemd service
   become: true
-  community.docker.docker_compose_v2:
-    project_src: "{{ wazuh_install_dir }}"
-    state: present
-    pull: always
+  ansible.builtin.template:
+    src: wazuh.service.j2
+    dest: /etc/systemd/system/wazuh.service
+    owner: root
+    group: root
+    mode: '0644'
+  register: wazuh_service
+
+- name: Reload systemd daemon
+  become: true
+  ansible.builtin.systemd:
+    daemon_reload: true
+  when: wazuh_service.changed
+
+# Deploy Wazuh
+- name: Enable and start Wazuh service
+  become: true
+  ansible.builtin.systemd:
+    name: wazuh
+    enabled: true
+    state: started
   register: wazuh_deployment
 
 - name: Wait for Wazuh Indexer port to be listening
