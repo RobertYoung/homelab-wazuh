@@ -14,6 +14,14 @@ resource "random_password" "wazuh_api_password" {
   override_special = "!@#$%^&*()-_=+[]{}:?"
 }
 
+# Generate random password for Kibana
+resource "random_password" "wazuh_kibana_password" {
+  length  = 32
+  special = true
+  # Ensure compatibility with Wazuh by avoiding problematic special characters
+  override_special = "!@#$%^&*()-_=+[]{}:?"
+}
+
 # Wazuh Indexer Password
 # Used by the indexer service for authentication
 resource "aws_ssm_parameter" "wazuh_indexer_password" {
@@ -38,6 +46,20 @@ resource "aws_ssm_parameter" "wazuh_api_password" {
 
   tags = {
     Component = "wazuh-api"
+    Purpose   = "authentication"
+  }
+}
+
+# Kibana Password
+# Used by the Wazuh dashboard (kibanaserver user) for authentication with the indexer
+resource "aws_ssm_parameter" "wazuh_kibana_password" {
+  name        = "/home-server/wazuh-kibana-password"
+  description = "Password for Wazuh dashboard kibanaserver user"
+  type        = "SecureString"
+  value       = random_password.wazuh_kibana_password.result
+
+  tags = {
+    Component = "wazuh-dashboard"
     Purpose   = "authentication"
   }
 }

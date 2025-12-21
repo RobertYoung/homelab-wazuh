@@ -29,3 +29,19 @@ output "wazuh_api_password" {
   value       = random_password.wazuh_api_password.result
   sensitive   = true
 }
+
+output "wazuh_kibana_password_arn" {
+  description = "ARN of the Wazuh Kibana password SSM parameter"
+  value       = aws_ssm_parameter.wazuh_kibana_password.arn
+}
+
+output "wazuh_kibana_password_name" {
+  description = "Name of the Wazuh Kibana password SSM parameter"
+  value       = aws_ssm_parameter.wazuh_kibana_password.name
+}
+
+output "wazuh_kibana_password" {
+  description = "Generated password for Wazuh Kibana (use 'terraform output -raw wazuh_kibana_password' to view)"
+  value       = random_password.wazuh_kibana_password.result
+  sensitive   = true
+}
