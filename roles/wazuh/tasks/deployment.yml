@@ -1,0 +1,127 @@
+---
+- name: Copy Docker Compose template
+  become: true
+  ansible.builtin.template:
+    src: templates/docker-compose.yml.j2
+    dest: "{{ wazuh_install_dir }}/docker-compose.yml"
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Copy indexer environment variables
+  become: true
+  ansible.builtin.template:
+    src: templates/indexer.env.j2
+    dest: "{{ wazuh_install_dir }}/indexer.env"
+    owner: root
+    group: root
+    mode: '0600'
+
+- name: Copy manager environment variables
+  become: true
+  ansible.builtin.template:
+    src: templates/manager.env.j2
+    dest: "{{ wazuh_install_dir }}/manager.env"
+    owner: root
+    group: root
+    mode: '0600'
+
+- name: Copy dashboard environment variables
+  become: true
+  ansible.builtin.template:
+    src: templates/dashboard.env.j2
+    dest: "{{ wazuh_install_dir }}/dashboard.env"
+    owner: root
+    group: root
+    mode: '0600'
+
+- name: Copy dashboard configuration file
+  become: true
+  ansible.builtin.template:
+    src: templates/opensearch_dashboards.yml.j2
+    dest: "{{ wazuh_install_dir }}/opensearch_dashboards.yml"
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Deploy Wazuh using Docker Compose
+  become: true
+  community.docker.docker_compose_v2:
+    project_src: "{{ wazuh_install_dir }}"
+    state: present
+    pull: always
+  register: wazuh_deployment
+
+- name: Wait for Wazuh Indexer port to be listening
+  ansible.builtin.wait_for:
+    host: localhost
+    port: "{{ wazuh_indexer_port }}"
+    delay: 10
+    timeout: 300
+    state: started
+  when: wazuh_deployment.changed
+
+- name: Wait for indexer to be ready
+  ansible.builtin.pause:
+    seconds: 30
+  when: wazuh_deployment.changed
+
+- name: Copy dashboard config to volume
+  become: true
+  ansible.builtin.shell:
+    cmd: docker cp {{ wazuh_install_dir }}/opensearch_dashboards.yml wazuh.dashboard:/usr/share/wazuh-dashboard/config/opensearch_dashboards.yml
+  when: wazuh_deployment.changed
+  ignore_errors: true
+
+- name: Initialize Wazuh Indexer security
+  become: true
+  ansible.builtin.shell:
+    cmd: |
+      docker exec wazuh.indexer bash -c "
+      JAVA_HOME=/usr/share/wazuh-indexer/jdk \
+      OPENSEARCH_PATH_CONF=/usr/share/wazuh-indexer/config \
+      /usr/share/wazuh-indexer/plugins/opensearch-security/tools/securityadmin.sh \
+        -cd /usr/share/wazuh-indexer/config/opensearch-security \
+        -icl \
+        -key /usr/share/wazuh-indexer/config/certs/admin-key.pem \
+        -cert /usr/share/wazuh-indexer/config/certs/admin.pem \
+        -cacert /usr/share/wazuh-indexer/config/certs/root-ca.pem \
+        -h wazuh.indexer \
+        -nhnv
+      "
+  when: wazuh_deployment.changed
+  register: indexer_security_init
+  until: indexer_security_init.rc == 0
+  retries: 10
+  delay: 10
+  ignore_errors: true
+
+- name: Restart dashboard after config copy
+  become: true
+  ansible.builtin.shell:
+    cmd: docker restart wazuh.dashboard
+  when: wazuh_deployment.changed and indexer_security_init is succeeded
+  ignore_errors: true
+
+- name: Wait for services to stabilize
+  ansible.builtin.pause:
+    seconds: 10
+  when: wazuh_deployment.changed
+
+- name: Wait for Wazuh Manager API to be healthy
+  ansible.builtin.wait_for:
+    host: localhost
+    port: "{{ wazuh_api_port }}"
+    delay: 10
+    timeout: 300
+    state: started
+  when: wazuh_deployment.changed
+
+- name: Wait for Wazuh Dashboard to be healthy
+  ansible.builtin.wait_for:
+    host: localhost
+    port: "{{ wazuh_dashboard_port }}"
+    delay: 10
+    timeout: 300
+    state: started
+  when: wazuh_deployment.changed

@@ -1,0 +1,134 @@
+---
+# Wazuh Certificate Creation using wazuh-certs-tool.sh
+# https://documentation.wazuh.com/current/installation-guide/wazuh-indexer/step-by-step.html#certificate-creation
+
+- name: Download wazuh-certs-tool.sh
+  become: true
+  ansible.builtin.get_url:
+    url: https://packages.wazuh.com/{{ wazuh_version }}/wazuh-certs-tool.sh
+    dest: "{{ wazuh_install_dir }}/wazuh-certs-tool.sh"
+    mode: '0755'
+
+- name: Create certificate configuration file
+  become: true
+  ansible.builtin.copy:
+    content: |
+      nodes:
+        # Wazuh indexer nodes
+        indexer:
+          - name: wazuh.indexer
+            ip: wazuh.indexer
+
+        # Wazuh server nodes
+        server:
+          - name: wazuh.manager
+            ip: wazuh.manager
+
+        # Wazuh dashboard nodes
+        dashboard:
+          - name: wazuh.dashboard
+            ip: wazuh.dashboard
+    dest: "{{ wazuh_install_dir }}/config.yml"
+    mode: '0644'
+
+- name: Generate Wazuh certificates
+  become: true
+  ansible.builtin.shell:
+    cmd: "{{ wazuh_install_dir }}/wazuh-certs-tool.sh --all"
+    chdir: "{{ wazuh_install_dir }}"
+    creates: "{{ wazuh_install_dir }}/wazuh-certificates.tar"
+
+- name: Extract generated certificates
+  become: true
+  ansible.builtin.unarchive:
+    src: "{{ wazuh_install_dir }}/wazuh-certificates.tar"
+    dest: "{{ wazuh_certs_dir }}"
+    remote_src: true
+
+- name: Set certificate ownership for indexer
+  become: true
+  ansible.builtin.file:
+    path: "{{ wazuh_certs_dir }}/{{ item }}"
+    owner: "1000"
+    group: "1000"
+    mode: "{{ '0600' if 'key' in item else '0644' }}"
+  loop:
+    - wazuh.indexer.pem
+    - wazuh.indexer-key.pem
+    - wazuh.manager.pem
+    - wazuh.manager-key.pem
+    - wazuh.dashboard.pem
+    - wazuh.dashboard-key.pem
+    - admin.pem
+    - admin-key.pem
+    - root-ca.pem
+
+# ===== COMMENTED OUT: Step CA Integration =====
+# The following tasks use Step CA for certificate management.
+# Commented out in favor of Wazuh's native certificate tool.
+
+# - name: Copy Step CA root certificate
+#   become: true
+#   ansible.builtin.copy:
+#     src: "{{ wazuh_step_ca_root_cert }}"
+#     dest: "{{ wazuh_certs_dir }}/root-ca.pem"
+#     owner: 1000
+#     group: 1000
+#     mode: '0644'
+#     remote_src: true
+
+# - name: Create Wazuh certificate renewer systemd service template
+#   become: true
+#   ansible.builtin.template:
+#     src: templates/wazuh-cert-renewer@.service.j2
+#     dest: /etc/systemd/system/wazuh-cert-renewer@.service
+#     owner: root
+#     group: root
+#     mode: '0644'
+#   register: wazuh_cert_renewer_service
+
+# - name: Create Wazuh certificate renewer systemd timer template
+#   become: true
+#   ansible.builtin.template:
+#     src: templates/wazuh-cert-renewer@.timer.j2
+#     dest: /etc/systemd/system/wazuh-cert-renewer@.timer
+#     owner: root
+#     group: root
+#     mode: '0644'
+#   register: wazuh_cert_renewer_timer
+
+# - name: Reload systemd daemon
+#   become: true
+#   ansible.builtin.systemd:
+#     daemon_reload: true
+#   when: wazuh_cert_renewer_service.changed or wazuh_cert_renewer_timer.changed
+
+# - name: Enable and start Wazuh certificate renewal timers
+#   become: true
+#   ansible.builtin.systemd:
+#     name: "wazuh-cert-renewer@{{ item }}.timer"
+#     enabled: true
+#     state: started
+#   loop:
+#     - manager
+#     - indexer
+#     - dashboard
+#     - admin
+
+# - name: Trigger certificate creation for initial deployment
+#   become: true
+#   ansible.builtin.systemd:
+#     name: "wazuh-cert-renewer@{{ item }}.service"
+#     state: started
+#   loop:
+#     - manager
+#     - indexer
+#     - dashboard
+#     - admin
+#   ignore_errors: true
+#   register: cert_creation
+
+# - name: Wait for certificate creation to complete
+#   ansible.builtin.pause:
+#     seconds: 5
+#   when: cert_creation.changed
