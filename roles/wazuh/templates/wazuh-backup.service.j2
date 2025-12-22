@@ -1,0 +1,14 @@
+[Unit]
+Description=Wazuh backup to S3
+After=docker.service wazuh.service
+Requires=docker.service wazuh.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/docker exec backup-toolkit /backup/backup.sh
+TimeoutStartSec=1800
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

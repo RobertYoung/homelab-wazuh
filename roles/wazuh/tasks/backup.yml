@@ -1,0 +1,80 @@
+---
+# Copy Dockerfile for backup-toolkit
+- name: Copy Dockerfile for backup-toolkit
+  become: true
+  ansible.builtin.copy:
+    src: files/Dockerfile.backup-toolkit
+    dest: "{{ wazuh_install_dir }}/Dockerfile.backup-toolkit"
+    owner: root
+    group: root
+    mode: '0644'
+  notify: restart backup-toolkit
+
+# Create scripts directory
+- name: Create scripts directory
+  become: true
+  ansible.builtin.file:
+    path: "{{ wazuh_install_dir }}/scripts"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+# Copy backup script
+- name: Copy backup script
+  become: true
+  ansible.builtin.copy:
+    src: files/backup.sh
+    dest: "{{ wazuh_install_dir }}/scripts/backup.sh"
+    owner: root
+    group: root
+    mode: '0755'
+  notify: restart backup-toolkit
+
+# Create backup-toolkit environment file
+- name: Create backup-toolkit environment file
+  become: true
+  ansible.builtin.template:
+    src: backup-toolkit.env.j2
+    dest: "{{ wazuh_install_dir }}/backup-toolkit.env"
+    owner: root
+    group: root
+    mode: '0600'
+  notify: restart wazuh
+
+# Install systemd service
+- name: Install Wazuh backup systemd service
+  become: true
+  ansible.builtin.template:
+    src: wazuh-backup.service.j2
+    dest: /etc/systemd/system/wazuh-backup.service
+    owner: root
+    group: root
+    mode: '0644'
+  register: backup_service
+
+# Install systemd timer
+- name: Install Wazuh backup systemd timer
+  become: true
+  ansible.builtin.template:
+    src: wazuh-backup.timer.j2
+    dest: /etc/systemd/system/wazuh-backup.timer
+    owner: root
+    group: root
+    mode: '0644'
+  register: backup_timer
+
+# Reload systemd daemon
+- name: Reload systemd daemon
+  become: true
+  ansible.builtin.systemd:
+    daemon_reload: true
+  when: backup_service.changed or backup_timer.changed
+
+# Enable and start timer
+- name: Enable and start Wazuh backup timer
+  become: true
+  ansible.builtin.systemd:
+    name: wazuh-backup.timer
+    enabled: true
+    state: started

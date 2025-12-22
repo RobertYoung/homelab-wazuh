@@ -88,6 +88,46 @@ services:
       - wazuh.indexer:wazuh.indexer
       - wazuh.manager:wazuh.manager
 
+  backup-toolkit:
+    build:
+      context: .
+      dockerfile: Dockerfile.backup-toolkit
+    container_name: backup-toolkit
+    hostname: backup-toolkit
+    restart: always
+    env_file:
+      - backup-toolkit.env
+    volumes:
+      # Mount all 14 Docker volumes as read-only
+      - wazuh_api_configuration:/backup/volumes/wazuh_api_configuration:ro
+      - wazuh_etc:/backup/volumes/wazuh_etc:ro
+      - wazuh_logs:/backup/volumes/wazuh_logs:ro
+      - wazuh_queue:/backup/volumes/wazuh_queue:ro
+      - wazuh_var_multigroups:/backup/volumes/wazuh_var_multigroups:ro
+      - wazuh_integrations:/backup/volumes/wazuh_integrations:ro
+      - wazuh_active_response:/backup/volumes/wazuh_active_response:ro
+      - wazuh_agentless:/backup/volumes/wazuh_agentless:ro
+      - wazuh_wodles:/backup/volumes/wazuh_wodles:ro
+      - filebeat_etc:/backup/volumes/filebeat_etc:ro
+      - filebeat_var:/backup/volumes/filebeat_var:ro
+      - wazuh-indexer-data:/backup/volumes/wazuh-indexer-data:ro
+      - wazuh-dashboard-config:/backup/volumes/wazuh-dashboard-config:ro
+      - wazuh-dashboard-custom:/backup/volumes/wazuh-dashboard-custom:ro
+
+      # Mount host directories as read-only
+      - ./config:/backup/host/config:ro
+      - ./certs:/backup/host/certs:ro
+      - ./manager.env:/backup/host/manager.env:ro
+      - ./indexer.env:/backup/host/indexer.env:ro
+      - ./dashboard.env:/backup/host/dashboard.env:ro
+      - ./docker-compose.yml:/backup/host/docker-compose.yml:ro
+
+      # Mount backup script
+      - ./scripts/backup.sh:/backup/backup.sh:ro
+
+      # Mount Docker socket for container control
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
 volumes:
   wazuh_api_configuration:
   wazuh_etc:

@@ -70,6 +70,7 @@
     owner: root
     group: root
     mode: '0600'
+  notify: restart wazuh
 
 - name: Copy indexer environment variables
   become: true
@@ -79,6 +80,7 @@
     owner: root
     group: root
     mode: '0600'
+  notify: restart wazuh
 
 - name: Copy dashboard environment variables
   become: true
@@ -88,6 +90,7 @@
     owner: root
     group: root
     mode: '0600'
+  notify: restart wazuh
 
 # Copy Docker Compose file
 - name: Copy Docker Compose template
@@ -98,6 +101,7 @@
     owner: root
     group: root
     mode: '0644'
+  notify: restart wazuh
 
 # Install systemd service for Wazuh
 - name: Install Wazuh systemd service
@@ -116,48 +120,9 @@
     daemon_reload: true
   when: wazuh_service.changed
 
-# Deploy Wazuh
-- name: Enable and start Wazuh service
+# Enable Wazuh service (will be started by handler after all config is ready)
+- name: Enable Wazuh service
   become: true
   ansible.builtin.systemd:
     name: wazuh
     enabled: true
-    state: started
-  register: wazuh_deployment
-
-- name: Wait for Wazuh Indexer port to be listening
-  ansible.builtin.wait_for:
-    host: localhost
-    port: "{{ wazuh_indexer_port }}"
-    delay: 10
-    timeout: 300
-    state: started
-  when: wazuh_deployment.changed
-
-- name: Wait for indexer to be ready
-  ansible.builtin.pause:
-    seconds: 30
-  when: wazuh_deployment.changed
-
-- name: Wait for services to stabilize
-  ansible.builtin.pause:
-    seconds: 10
-  when: wazuh_deployment.changed
-
-- name: Wait for Wazuh Manager API to be healthy
-  ansible.builtin.wait_for:
-    host: localhost
-    port: "{{ wazuh_api_port }}"
-    delay: 10
-    timeout: 300
-    state: started
-  when: wazuh_deployment.changed
-
-- name: Wait for Wazuh Dashboard to be healthy
-  ansible.builtin.wait_for:
-    host: localhost
-    port: "{{ wazuh_dashboard_port }}"
-    delay: 10
-    timeout: 300
-    state: started
-  when: wazuh_deployment.changed
