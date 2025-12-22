@@ -9,3 +9,10 @@ domain: local.iamrobertyoung.co.uk
 wazuh_indexer_password: "{{ lookup('amazon.aws.aws_ssm', '/home-server/wazuh-indexer-password') }}"
 wazuh_api_password: "{{ lookup('amazon.aws.aws_ssm', '/home-server/wazuh-api-password') }}"
 wazuh_kibana_password: "{{ lookup('amazon.aws.aws_ssm', '/home-server/wazuh-kibana-password') }}"
+
+# Backup credentials from AWS SSM
+wazuh_backup_aws_access_key_id: "{{ lookup('amazon.aws.aws_ssm', '/home-server/access-key') }}"
+wazuh_backup_aws_secret_access_key: "{{ lookup('amazon.aws.aws_ssm', '/home-server/secret-access-key') }}"
+wazuh_backup_mqtt_host: "mosquitto.{{ domain }}"
+wazuh_backup_mqtt_username: "home-assistant"
+wazuh_backup_mqtt_password: "{{ lookup('amazon.aws.aws_ssm', '/home-server/mosquitto-home-assistant-password') }}"

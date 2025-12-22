@@ -1,0 +1,37 @@
+---
+# Flush handlers to ensure Wazuh service is started
+- name: Flush handlers
+  meta: flush_handlers
+
+# Wait for services to come up
+- name: Wait for Wazuh Indexer port to be listening
+  ansible.builtin.wait_for:
+    host: localhost
+    port: "{{ wazuh_indexer_port }}"
+    delay: 10
+    timeout: 300
+    state: started
+
+- name: Wait for indexer to be ready
+  ansible.builtin.pause:
+    seconds: 30
+
+- name: Wait for services to stabilize
+  ansible.builtin.pause:
+    seconds: 10
+
+- name: Wait for Wazuh Manager API to be healthy
+  ansible.builtin.wait_for:
+    host: localhost
+    port: "{{ wazuh_api_port }}"
+    delay: 10
+    timeout: 300
+    state: started
+
+- name: Wait for Wazuh Dashboard to be healthy
+  ansible.builtin.wait_for:
+    host: localhost
+    port: "{{ wazuh_dashboard_port }}"
+    delay: 10
+    timeout: 300
+    state: started

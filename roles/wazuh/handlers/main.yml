@@ -1,6 +1,19 @@
 ---
 - name: restart wazuh
-  ansible.builtin.systemd:
-    name: wazuh
-    state: restarted
   become: true
+  ansible.builtin.shell: |
+    if systemctl is-active --quiet wazuh; then
+      systemctl restart wazuh
+    else
+      systemctl start wazuh
+    fi
+  changed_when: true
+
+- name: restart backup-toolkit
+  become: true
+  ansible.builtin.shell: |
+    docker compose stop backup-toolkit
+    docker compose up -d --build backup-toolkit
+  args:
+    chdir: "{{ wazuh_install_dir }}"
+  changed_when: true

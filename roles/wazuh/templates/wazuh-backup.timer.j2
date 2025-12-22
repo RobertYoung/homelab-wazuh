@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily Wazuh backup at 4 AM
+Requires=wazuh-backup.service
+
+[Timer]
+OnCalendar={{ wazuh_backup_schedule }}
+RandomizedDelaySec=15m
+Persistent=true
+
+[Install]
+WantedBy=timers.target

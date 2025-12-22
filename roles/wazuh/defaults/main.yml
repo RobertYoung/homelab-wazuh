@@ -22,3 +22,10 @@ wazuh_step_ca_password_file: /root/.step/config/ansible_provisioner_password.txt
 # Domain configuration (should be overridden in group_vars)
 domain: local.iamrobertyoung.co.uk
 wazuh_domain: "wazuh.{{ domain }}"
+
+# Backup configuration
+wazuh_backup_enabled: true
+wazuh_backup_s3_bucket: "home-server-backup.iamrobertyoung.co.uk"
+wazuh_backup_aws_region: "eu-west-2"
+wazuh_backup_mqtt_port: 1883
+wazuh_backup_schedule: "*-*-* 04:00:00"

@@ -2,11 +2,36 @@
 - name: Prerequisites
   ansible.builtin.include_tasks:
     file: prerequisites.yml
+    apply:
+      tags: [prerequisites]
+  tags:
+    - always
 
 - name: Certificates
   ansible.builtin.include_tasks:
     file: certificates.yml
+    apply:
+      tags: [certificates]
+  tags:
+    - always
 
 - name: Deployment
   ansible.builtin.include_tasks:
     file: deployment.yml
+    apply:
+      tags: [deployment]
+  tags:
+    - always
+
+- name: Backup
+  ansible.builtin.include_tasks:
+    file: backup.yml
+    apply:
+      tags: [backup]
+  tags:
+    - always
+  when: wazuh_backup_enabled | default(true)
+
+- name: Finalize deployment
+  ansible.builtin.include_tasks:
+    file: finalize.yml
