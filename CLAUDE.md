@@ -20,8 +20,8 @@ aws-vault exec iamrobertyoung:home-assistant-production:p -- ansible-playbook pl
 # Run specific role only
 aws-vault exec iamrobertyoung:home-assistant-production:p -- ansible-playbook playbooks/site.yml --tags wazuh
 
-# Install external dependencies (roles + collections)
-aws-vault exec iamrobertyoung:home-assistant-production:p -- ansible-galaxy install -r requirements.yml
+# Install external dependencies (roles)
+aws-vault exec iamrobertyoung:home-assistant-production:p -- ansible-galaxy install -r requirements.yml -p .roles
 
 # Create new custom role
 aws-vault exec iamrobertyoung:home-assistant-production:p -- ansible-galaxy init roles/role_name
@@ -39,11 +39,11 @@ aws-vault exec iamrobertyoung:home-assistant-production:p -- terraform apply
 ### Deployment Stack
 The main playbook (`playbooks/site.yml`) applies these roles in order:
 1. `configure-system` - Base system configuration
-2. `robertyoung.homelab.shell` - Shell setup for users (noxious, root)
-3. `robertyoung.homelab.docker` - Docker installation
-4. `robertyoung.homelab.telegraf` - Metrics collection to InfluxDB
-5. `robertyoung.homelab.step_ca_client` - TLS certificates from Step CA
-6. `robertyoung.homelab.syslog` - Syslog configuration
+2. `shell` - Shell setup for users (noxious, root)
+3. `docker` - Docker installation
+4. `telegraf` - Metrics collection to InfluxDB
+5. `step-ca-client` - TLS certificates from Step CA
+6. `syslog` - Syslog configuration
 7. `wazuh` - Wazuh SIEM deployment (Docker Compose with systemd service)
 
 ### Wazuh Role Structure
@@ -67,7 +67,11 @@ Ansible retrieves them via `lookup('amazon.aws.aws_ssm', ...)`.
 ### External Dependencies
 Dependencies in `requirements.yml` are installed to `.roles/` (gitignored):
 - `configure-system` role from GitHub
-- `robertyoung.homelab` collection from GitHub
+- `shell` role from GitHub
+- `docker` role from GitHub
+- `telegraf` role from GitHub
+- `step-ca-client` role from GitHub
+- `syslog` role from GitHub
 
 ### Available Tags
 Run specific parts with `--tags`: `configure-system`, `shell`, `docker`, `telegraf`, `step-ca-client`, `syslog`, `wazuh`, `prerequisites`, `certificates`, `deployment`, `backup`
