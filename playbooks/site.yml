@@ -10,23 +10,23 @@
     - role: configure-system
       tags: [configure-system]
 
-    - role: shell
+    - role: robertyoung.homelab.shell
       tags: [shell]
       vars:
         user: noxious
         home_directory: /home/noxious
 
-    - role: shell
+    - role: robertyoung.homelab.shell
       tags: [shell]
       vars:
         user: root
         home_directory: /root
         show_pretty_info: false
 
-    - role: docker
+    - role: robertyoung.homelab.docker
       tags: [docker]
 
-    - role: telegraf
+    - role: robertyoung.homelab.telegraf
       tags: [telegraf]
       vars:
         telegraf_influxdb_url: "https://influxdb.{{ domain }}"
@@ -35,7 +35,7 @@
         telegraf_influxdb_token: "{{ lookup('amazon.aws.aws_ssm', '/home-server/influxdb-token') }}"
         telegraf_influxdb_bucket: "home-server"
 
-    - role: step-ca-client
+    - role: robertyoung.homelab.step_ca_client
       tags: [step-ca-client]
       vars:
         ansible_provisioner_password: "{{ lookup('amazon.aws.aws_ssm', '/home-server/step-ca-ansible-password') }}"
@@ -43,7 +43,7 @@
         service_cert_file: "/etc/ssl/certs/{{ fqdn }}.crt"
         service_key_file: "/etc/ssl/private/{{ fqdn }}.pem"
 
-    - role: syslog
+    - role: robertyoung.homelab.syslog
       tags: [syslog]
 
     - role: wazuh
