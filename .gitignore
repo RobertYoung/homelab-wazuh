@@ -8,6 +8,7 @@ vault_pass.txt
 
 # Downloaded roles
 roles/external/
+.roles/
 
 # OS files
 .DS_Store
