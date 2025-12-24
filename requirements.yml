@@ -2,7 +2,6 @@
 # External Ansible dependencies
 # Install with:
 #   ansible-galaxy install -r requirements.yml -p .roles
-#   ansible-galaxy collection install -r requirements.yml
 
 roles:
   - src: git@github.com:RobertYoung/homelab-ansible-role-configure-system.git
@@ -10,7 +9,24 @@ roles:
     version: v1.0.0
     name: configure-system
 
-collections:
-  - name: git@github.com:RobertYoung/homelab-ansible-roles.git
-    type: git
-    version: v1.2.0
+  - src: git@github.com:RobertYoung/homelab-ansible-role-shell.git
+    scm: git
+    name: shell
+
+  - src: git@github.com:RobertYoung/homelab-ansible-role-docker.git
+    scm: git
+    name: docker
+
+  - src: git@github.com:RobertYoung/homelab-ansible-role-telegraf.git
+    scm: git
+    name: telegraf
+
+  - src: git@github.com:RobertYoung/homelab-ansible-role-step-ca-client.git
+    scm: git
+    name: step-ca-client
+
+  - src: git@github.com:RobertYoung/homelab-ansible-role-syslog.git
+    scm: git
+    name: syslog
+
+# Note: The robertyoung.homelab collection has been replaced by standalone roles above
