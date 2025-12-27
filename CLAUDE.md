@@ -17,6 +17,9 @@ aws-vault exec iamrobertyoung:home-assistant-production:p -- ansible wazuh -m pi
 # Run full playbook
 aws-vault exec iamrobertyoung:home-assistant-production:p -- ansible-playbook playbooks/site.yml
 
+# Dry-run (check mode)
+aws-vault exec iamrobertyoung:home-assistant-production:p -- ansible-playbook playbooks/site.yml --check
+
 # Run specific role only
 aws-vault exec iamrobertyoung:home-assistant-production:p -- ansible-playbook playbooks/site.yml --tags wazuh
 
@@ -33,6 +36,13 @@ cd terraform
 aws-vault exec iamrobertyoung:home-assistant-production:p -- terraform init
 aws-vault exec iamrobertyoung:home-assistant-production:p -- terraform apply
 ```
+
+### Pre-commit Hooks
+```bash
+pre-commit install  # Setup hooks
+pre-commit run --all-files  # Run manually
+```
+Hooks: gitleaks (secret detection), end-of-file-fixer, trailing-whitespace
 
 ## Architecture
 
@@ -76,7 +86,16 @@ Dependencies in `requirements.yml` are installed to `.roles/` (gitignored):
 ### Available Tags
 Run specific parts with `--tags`: `configure-system`, `shell`, `docker`, `telegraf`, `step-ca-client`, `syslog`, `wazuh`, `prerequisites`, `certificates`, `deployment`, `backup`
 
-### Tool Versions (mise.toml)
+## Commit Conventions
+
+Uses conventional commits with semantic-release for automated versioning:
+- `feat:` - New features (minor release)
+- `fix:` - Bug fixes (patch release)
+- `refactor:`, `perf:`, `docs:` - Patch release
+- `chore:`, `test:`, `ci:` - No release
+- `BREAKING CHANGE:` in footer - Major release
+
+## Tool Versions (mise.toml)
 - ansible 13.1.0
 - terraform 1.14.3
 - pipx 1.8.0
