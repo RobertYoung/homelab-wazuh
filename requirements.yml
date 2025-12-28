@@ -26,12 +26,11 @@ roles:
 
   - src: git@github.com:RobertYoung/homelab-ansible-role-step-ca-client.git
     scm: git
-    version: v1.2.0
+    version: v2.0.0
     name: step-ca-client
 
   - src: git@github.com:RobertYoung/homelab-ansible-role-syslog.git
     scm: git
     version: v1.0.0
     name: syslog
-
 # Note: The robertyoung.homelab collection has been replaced by standalone roles above
