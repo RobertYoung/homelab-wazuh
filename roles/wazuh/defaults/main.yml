@@ -16,8 +16,10 @@ wazuh_indexer_port: 9200
 wazuh_dashboard_port: 443
 
 # Certificate configuration (Step CA integration)
+# Note: step_ca_client_provisioner_password should be set in group_vars via SSM lookup
+# Certificates are created by Ansible and renewed via mTLS (no password stored on disk)
 wazuh_step_ca_provisioner: ansible
-wazuh_step_ca_password_file: /root/.step/config/ansible_provisioner_password.txt
+wazuh_cert_validity: "168h"
 
 # Domain configuration (should be overridden in group_vars)
 domain: local.iamrobertyoung.co.uk

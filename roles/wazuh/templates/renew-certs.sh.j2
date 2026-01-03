@@ -1,16 +1,14 @@
 #!/bin/bash
-set -e
+# Certificate renewal script for Wazuh using Step CA
+# Renewals use mTLS - the existing certificate authenticates to the CA
+# No password is needed for renewal (password only used for initial creation via Ansible)
+set -euo pipefail
 
 # Common configuration
 CERT_DIR="{{ wazuh_config_dir }}/wazuh_indexer_ssl_certs"
 FRONTEND_CERT_DIR="{{ wazuh_certs_dir }}/step-ca"
 CERT_OWNER="1000"
 CERT_GROUP="1000"
-PROVISIONER="{{ wazuh_step_ca_provisioner }}"
-PASSWORD_FILE="{{ wazuh_step_ca_password_file }}"
-CERT_VALIDITY="168h"
-KEY_TYPE="RSA"
-KEY_SIZE="2048"
 
 # Track which containers need restart
 RESTART_INDEXER=0
@@ -21,7 +19,8 @@ RESTART_DASHBOARD=0
 needs_renewal() {
   local cert_path="$1"
   if [ ! -f "$cert_path" ]; then
-    return 0  # Cert doesn't exist, needs generation
+    echo "Certificate $cert_path does not exist - must be created via Ansible"
+    return 1  # Don't try to renew non-existent cert
   fi
   if /usr/bin/step certificate needs-renewal "$cert_path"; then
     return 0  # Cert needs renewal
@@ -38,95 +37,81 @@ container_exists() {
 # Function to wait for container to be healthy
 wait_for_container() {
   local container_name="$1"
-  local max_wait=60
-  local count=0
+  local max_wait="${2:-180}"  # Default 180 seconds (3 minutes)
+  local elapsed=0
 
   if ! container_exists "$container_name"; then
     echo "Container $container_name does not exist yet, skipping health check"
     return 0
   fi
 
-  echo "Waiting for $container_name to be healthy..."
-  while [ $count -lt $max_wait ]; do
+  echo "Waiting for $container_name to be healthy (timeout: ${max_wait}s)..."
+  while [ $elapsed -lt $max_wait ]; do
     if /usr/bin/docker inspect --format='{{ '{{' }}.State.Health.Status{{ '}}' }}' "$container_name" 2>/dev/null | grep -q "healthy"; then
-      echo "$container_name is healthy"
+      echo "$container_name is healthy after ${elapsed}s"
       return 0
     fi
-    sleep 2
-    count=$((count + 1))
+    sleep 5
+    elapsed=$((elapsed + 5))
   done
 
   echo "Warning: $container_name did not become healthy within ${max_wait} seconds"
   return 1
 }
 
-# Generate indexer certificate
+# Renew indexer certificate using mTLS
 if needs_renewal "$CERT_DIR/wazuh.indexer.pem"; then
   echo "Renewing indexer certificate..."
-  /usr/bin/step ca certificate wazuh.indexer \
+  /usr/bin/step ca renew --force \
     "$CERT_DIR/wazuh.indexer.pem" \
-    "$CERT_DIR/wazuh.indexer-key.pem" \
-    --provisioner "$PROVISIONER" \
-    --provisioner-password-file "$PASSWORD_FILE" \
-    --kty "$KEY_TYPE" --size "$KEY_SIZE" --not-after="$CERT_VALIDITY" --force
+    "$CERT_DIR/wazuh.indexer-key.pem"
   /usr/bin/chown "$CERT_OWNER:$CERT_GROUP" "$CERT_DIR/wazuh.indexer.pem" "$CERT_DIR/wazuh.indexer-key.pem"
   RESTART_INDEXER=1
 else
   echo "Indexer certificate does not need renewal"
 fi
 
-# Generate manager certificate
+# Renew manager certificate using mTLS
 if needs_renewal "$CERT_DIR/wazuh.manager.pem"; then
   echo "Renewing manager certificate..."
-  /usr/bin/step ca certificate wazuh.manager \
+  /usr/bin/step ca renew --force \
     "$CERT_DIR/wazuh.manager.pem" \
-    "$CERT_DIR/wazuh.manager-key.pem" \
-    --provisioner "$PROVISIONER" \
-    --provisioner-password-file "$PASSWORD_FILE" \
-    --kty "$KEY_TYPE" --size "$KEY_SIZE" --not-after="$CERT_VALIDITY" --force
+    "$CERT_DIR/wazuh.manager-key.pem"
   /usr/bin/chown "$CERT_OWNER:$CERT_GROUP" "$CERT_DIR/wazuh.manager.pem" "$CERT_DIR/wazuh.manager-key.pem"
   RESTART_MANAGER=1
 else
   echo "Manager certificate does not need renewal"
 fi
 
-# Generate dashboard backend certificate
+# Renew dashboard backend certificate using mTLS
 if needs_renewal "$CERT_DIR/wazuh.dashboard.pem"; then
   echo "Renewing dashboard backend certificate..."
-  /usr/bin/step ca certificate wazuh.dashboard \
+  /usr/bin/step ca renew --force \
     "$CERT_DIR/wazuh.dashboard.pem" \
-    "$CERT_DIR/wazuh.dashboard-key.pem" \
-    --provisioner "$PROVISIONER" \
-    --provisioner-password-file "$PASSWORD_FILE" \
-    --kty "$KEY_TYPE" --size "$KEY_SIZE" --not-after="$CERT_VALIDITY" --force
+    "$CERT_DIR/wazuh.dashboard-key.pem"
   /usr/bin/chown "$CERT_OWNER:$CERT_GROUP" "$CERT_DIR/wazuh.dashboard.pem" "$CERT_DIR/wazuh.dashboard-key.pem"
   RESTART_DASHBOARD=1
 else
   echo "Dashboard backend certificate does not need renewal"
 fi
 
-# Generate admin certificate
+# Renew admin certificate using mTLS
 # Admin cert requires PKCS8 format key for OpenSearch Security plugin
 if needs_renewal "$CERT_DIR/admin.pem"; then
   echo "Renewing admin certificate..."
 
-  # Generate certificate with Step CA
-  /usr/bin/step ca certificate admin \
+  # Renew certificate using mTLS
+  /usr/bin/step ca renew --force \
     "$CERT_DIR/admin.pem" \
-    "$CERT_DIR/admin-key-temp.pem" \
-    --provisioner "$PROVISIONER" \
-    --provisioner-password-file "$PASSWORD_FILE" \
-    --kty "$KEY_TYPE" --size "$KEY_SIZE" --not-after="$CERT_VALIDITY" --force
+    "$CERT_DIR/admin-key.pem"
 
   # Convert private key to PKCS8 format (required by OpenSearch Security)
-  # Step CA generates PKCS8 by default with --kty RSA, but we ensure it explicitly
   /usr/bin/openssl pkcs8 -inform PEM -outform PEM \
-    -in "$CERT_DIR/admin-key-temp.pem" \
+    -in "$CERT_DIR/admin-key.pem" \
     -topk8 -nocrypt -v1 PBE-SHA1-3DES \
-    -out "$CERT_DIR/admin-key.pem"
+    -out "$CERT_DIR/admin-key-pkcs8.pem"
 
-  # Remove temporary key file
-  rm -f "$CERT_DIR/admin-key-temp.pem"
+  mv "$CERT_DIR/admin-key-pkcs8.pem" "$CERT_DIR/admin-key.pem"
 
   /usr/bin/chown "$CERT_OWNER:$CERT_GROUP" "$CERT_DIR/admin.pem" "$CERT_DIR/admin-key.pem"
   # Admin cert doesn't require container restart
@@ -134,15 +119,12 @@ else
   echo "Admin certificate does not need renewal"
 fi
 
-# Generate dashboard frontend certificate
+# Renew dashboard frontend certificate using mTLS
 if needs_renewal "$FRONTEND_CERT_DIR/fullchain.pem"; then
   echo "Renewing dashboard frontend certificate..."
-  /usr/bin/step ca certificate {{ wazuh_domain }} \
+  /usr/bin/step ca renew --force \
     "$FRONTEND_CERT_DIR/fullchain.pem" \
-    "$FRONTEND_CERT_DIR/privkey.pem" \
-    --provisioner "$PROVISIONER" \
-    --provisioner-password-file "$PASSWORD_FILE" \
-    --not-after="$CERT_VALIDITY" --force
+    "$FRONTEND_CERT_DIR/privkey.pem"
   /usr/bin/chown "$CERT_OWNER:$CERT_GROUP" "$FRONTEND_CERT_DIR"/*.pem
   /usr/bin/chmod 440 "$FRONTEND_CERT_DIR"/*.pem
   RESTART_DASHBOARD=1
@@ -151,11 +133,13 @@ else
 fi
 
 # Restart containers in order if needed
+# Note: Health check failures are logged but don't prevent subsequent restarts
 if [ $RESTART_INDEXER -eq 1 ]; then
   if container_exists wazuh.indexer; then
     echo "Restarting wazuh.indexer..."
     /usr/bin/docker restart wazuh.indexer 2>/dev/null || echo "Warning: Failed to restart wazuh.indexer"
-    wait_for_container wazuh.indexer
+    # Indexer needs longer timeout (5 minutes) as OpenSearch can be slow to initialize
+    wait_for_container wazuh.indexer 300 || echo "Continuing despite indexer health check timeout..."
   else
     echo "Container wazuh.indexer does not exist yet, skipping restart"
   fi
@@ -165,7 +149,7 @@ if [ $RESTART_MANAGER -eq 1 ]; then
   if container_exists wazuh.manager; then
     echo "Restarting wazuh.manager..."
     /usr/bin/docker restart wazuh.manager 2>/dev/null || echo "Warning: Failed to restart wazuh.manager"
-    wait_for_container wazuh.manager
+    wait_for_container wazuh.manager 180 || echo "Continuing despite manager health check timeout..."
   else
     echo "Container wazuh.manager does not exist yet, skipping restart"
   fi
@@ -175,7 +159,7 @@ if [ $RESTART_DASHBOARD -eq 1 ]; then
   if container_exists wazuh.dashboard; then
     echo "Restarting wazuh.dashboard..."
     /usr/bin/docker restart wazuh.dashboard 2>/dev/null || echo "Warning: Failed to restart wazuh.dashboard"
-    wait_for_container wazuh.dashboard
+    wait_for_container wazuh.dashboard 180 || echo "Continuing despite dashboard health check timeout..."
   else
     echo "Container wazuh.dashboard does not exist yet, skipping restart"
   fi
