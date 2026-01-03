@@ -1,6 +1,7 @@
 ---
-# Wazuh Certificate Management using Step CA and systemd
-# Systemd services handle all certificate generation and renewal
+# Wazuh Certificate Management using Step CA
+# Initial certificates are created by Ansible (password via stdin, not stored)
+# Renewals use mTLS (existing certificate authenticates to CA)
 
 - name: Create SSL certificates directory
   become: true
@@ -71,10 +72,131 @@
     path: "{{ wazuh_install_dir }}/scripts/renew-cert.sh"
     state: absent
 
+- name: Remove old provisioner password file
+  become: true
+  ansible.builtin.file:
+    path: /root/.step/config/ansible_provisioner_password.txt
+    state: absent
+
 - name: Reload systemd daemon after cleanup
   become: true
   ansible.builtin.systemd:
     daemon_reload: true
+
+# --- Initial Certificate Creation via Ansible ---
+# Certificates are created using password via stdin (not stored on disk)
+
+- name: Define wazuh certificates
+  ansible.builtin.set_fact:
+    wazuh_certificates:
+      - name: wazuh.indexer
+        cert: "{{ wazuh_config_dir }}/wazuh_indexer_ssl_certs/wazuh.indexer.pem"
+        key: "{{ wazuh_config_dir }}/wazuh_indexer_ssl_certs/wazuh.indexer-key.pem"
+        owner: "1000"
+        group: "1000"
+      - name: wazuh.manager
+        cert: "{{ wazuh_config_dir }}/wazuh_indexer_ssl_certs/wazuh.manager.pem"
+        key: "{{ wazuh_config_dir }}/wazuh_indexer_ssl_certs/wazuh.manager-key.pem"
+        owner: "1000"
+        group: "1000"
+      - name: wazuh.dashboard
+        cert: "{{ wazuh_config_dir }}/wazuh_indexer_ssl_certs/wazuh.dashboard.pem"
+        key: "{{ wazuh_config_dir }}/wazuh_indexer_ssl_certs/wazuh.dashboard-key.pem"
+        owner: "1000"
+        group: "1000"
+      - name: admin
+        cert: "{{ wazuh_config_dir }}/wazuh_indexer_ssl_certs/admin.pem"
+        key: "{{ wazuh_config_dir }}/wazuh_indexer_ssl_certs/admin-key.pem"
+        owner: "1000"
+        group: "1000"
+        pkcs8: true
+      - name: "{{ wazuh_domain }}"
+        cert: "{{ wazuh_certs_dir }}/step-ca/fullchain.pem"
+        key: "{{ wazuh_certs_dir }}/step-ca/privkey.pem"
+        owner: "1000"
+        group: "1000"
+
+- name: Check if certificates exist
+  become: true
+  ansible.builtin.stat:
+    path: "{{ item.cert }}"
+  register: cert_stats
+  loop: "{{ wazuh_certificates }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Check certificate expiry
+  become: true
+  ansible.builtin.command:
+    cmd: openssl x509 -in "{{ item.item.cert }}" -checkend 0 -noout
+  register: cert_expiry_checks
+  changed_when: false
+  failed_when: false
+  when: item.stat.exists
+  loop: "{{ cert_stats.results }}"
+  loop_control:
+    label: "{{ item.item.name }}"
+
+- name: Create certificates that don't exist or are expired
+  become: true
+  ansible.builtin.shell: |
+    /usr/bin/step ca certificate "{{ item.0.item.name }}" \
+      "{{ item.0.item.cert }}" "{{ item.0.item.key }}" \
+      --provisioner "{{ wazuh_step_ca_provisioner }}" \
+      --provisioner-password-file /dev/stdin \
+      --kty RSA --size 2048 \
+      --not-after "{{ wazuh_cert_validity }}" \
+      --force <<< "{{ step_ca_client_provisioner_password }}"
+  args:
+    executable: /bin/bash
+  when: >
+    not item.0.stat.exists or
+    (item.1.rc is defined and item.1.rc != 0)
+  loop: "{{ cert_stats.results | zip(cert_expiry_checks.results | default([])) | list }}"
+  loop_control:
+    label: "{{ item.0.item.name }}"
+  register: certs_created
+  changed_when: certs_created.rc == 0
+  no_log: true
+
+- name: Convert admin key to PKCS8 format
+  become: true
+  ansible.builtin.shell: |
+    /usr/bin/openssl pkcs8 -inform PEM -outform PEM \
+      -in "{{ wazuh_config_dir }}/wazuh_indexer_ssl_certs/admin-key.pem" \
+      -topk8 -nocrypt -v1 PBE-SHA1-3DES \
+      -out "{{ wazuh_config_dir }}/wazuh_indexer_ssl_certs/admin-key-pkcs8.pem"
+    mv "{{ wazuh_config_dir }}/wazuh_indexer_ssl_certs/admin-key-pkcs8.pem" \
+       "{{ wazuh_config_dir }}/wazuh_indexer_ssl_certs/admin-key.pem"
+  args:
+    executable: /bin/bash
+  when: certs_created.results | selectattr('item.0.item.name', 'equalto', 'admin') | selectattr('changed', 'defined') | selectattr('changed') | list | length > 0
+  changed_when: true
+
+- name: Set certificate ownership
+  become: true
+  ansible.builtin.file:
+    path: "{{ item.cert }}"
+    owner: "{{ item.owner }}"
+    group: "{{ item.group }}"
+    mode: '0644'
+  loop: "{{ wazuh_certificates }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Set key ownership
+  become: true
+  ansible.builtin.file:
+    path: "{{ item.key }}"
+    owner: "{{ item.owner }}"
+    group: "{{ item.group }}"
+    mode: '0600'
+  loop: "{{ wazuh_certificates }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+# --- Renewal Service Setup ---
+# Renewal uses mTLS (existing cert authenticates to CA, no password needed)
 
 - name: Create certificate renewal scripts directory
   become: true
@@ -119,12 +241,6 @@
   ansible.builtin.systemd:
     daemon_reload: true
   when: renewal_service.changed or renewal_timer.changed
-
-- name: Trigger initial certificate generation
-  become: true
-  ansible.builtin.systemd:
-    name: wazuh-cert-renewer.service
-    state: started
 
 - name: Enable and start Step CA certificate renewal timer
   become: true

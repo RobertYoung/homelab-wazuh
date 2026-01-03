@@ -6,12 +6,12 @@
 roles:
   - src: git@github.com:RobertYoung/homelab-ansible-role-configure-system.git
     scm: git
-    version: v1.0.1
+    version: v1.1.0
     name: configure-system
 
   - src: git@github.com:RobertYoung/homelab-ansible-role-shell.git
     scm: git
-    version: v1.2.0
+    version: v1.4.0
     name: shell
 
   - src: git@github.com:RobertYoung/homelab-ansible-role-docker.git
@@ -21,16 +21,15 @@ roles:
 
   - src: git@github.com:RobertYoung/homelab-ansible-role-telegraf.git
     scm: git
-    version: v1.0.0
+    version: v1.1.1
     name: telegraf
 
   - src: git@github.com:RobertYoung/homelab-ansible-role-step-ca-client.git
     scm: git
-    version: v2.0.0
+    version: v3.0.0
     name: step-ca-client
 
   - src: git@github.com:RobertYoung/homelab-ansible-role-syslog.git
     scm: git
-    version: v1.0.0
+    version: v1.1.1
     name: syslog
-# Note: The robertyoung.homelab collection has been replaced by standalone roles above
